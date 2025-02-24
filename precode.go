@@ -14,12 +14,12 @@ import (
 // сгенерированных чисел.
 func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 	// 1. Функция Generator
-	var i int64 = 0
+	var i int64 = 1
 	for {
 		select {
-		case ch <- i + 1:
-			i++
+		case ch <- i:
 			fn(i)
+			i++
 		case <-ctx.Done():
 			close(ch)
 			return
@@ -39,6 +39,7 @@ func Worker(in <-chan int64, out chan<- int64) {
 
 func main() {
 	chIn := make(chan int64)
+	var mu sync.Mutex
 
 	// 3. Создание контекста
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -50,8 +51,10 @@ func main() {
 
 	// генерируем числа, считая параллельно их количество и сумму
 	go Generator(ctx, chIn, func(i int64) {
+		mu.Lock()
 		inputSum += i
 		inputCount++
+		mu.Unlock()
 	})
 
 	const NumOut = 5 // количество обрабатывающих горутин и каналов
@@ -76,8 +79,8 @@ func main() {
 		go func(i int, ch chan int64) {
 			defer wg.Done()
 			for num := range ch {
-				chOut <- num
 				amounts[i]++
+				chOut <- num
 			}
 		}(i, ch)
 	}
